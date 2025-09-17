@@ -1,0 +1,28 @@
+import pyautogui as aut 
+usuario = input("Qual seu usuario do insta: ")
+senha = input("Qual sua senha  do insta: ")
+#aut.mouseInfo()
+aut.press("win")
+aut.sleep(2)
+aut.write("instagram")
+aut.press("enter")
+aut.sleep(2)
+aut.moveTo(249,378)
+aut.click()
+aut.moveTo(1224,393)
+aut.sleep(1)
+aut.click()
+aut.write(f"{usuario}")
+aut.sleep(3)
+aut.moveTo(1122,446)
+aut.click()
+aut.sleep(1)
+aut.write(f"{senha}")
+aut.sleep(1)
+aut.moveTo(1210,484)
+aut.sleep(1)
+aut.click()
+
+
+
+ 
