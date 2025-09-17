@@ -1,0 +1,4 @@
+try:
+    idade = int(input("digite a sua idade:"))
+except: 
+    print("voce digitou errado a idade")
