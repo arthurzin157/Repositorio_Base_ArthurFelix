@@ -1,0 +1,8 @@
+import csv
+
+teste = open("dados.csv") # abri o arquivo
+arquivo = csv.DictReader(teste)# lendo o arquivo
+
+for linha in arquivo:
+    if linha['Valor']  <= "50000 ":
+        print(linha)
