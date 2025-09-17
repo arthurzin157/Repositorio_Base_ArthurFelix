@@ -1,0 +1,278 @@
+import pygame
+import random
+import sys
+
+pygame.init()
+
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Sobrevivência: Cavalo vs Zumbi")
+
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BROWN = (139, 69, 19)
+GRAY = (200, 200, 200)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+YELLOW = (255, 255, 0)
+
+clock = pygame.time.Clock()
+FPS = 60
+
+font = pygame.font.SysFont("Arial", 30)
+big_font = pygame.font.SysFont("Arial", 50)
+
+# Player info
+player_size = 50
+player_pos = [WIDTH // 4, HEIGHT // 2]
+player_health = 100
+player_max_health = 100
+player_speed = 5
+
+# Weapons info
+weapons = {
+    "Ovo": {"damage": 20, "speed": 10},
+    "Flecha": {"damage": 35, "speed": 15},
+    "Martelo": {"damage": 50, "speed": 7},
+}
+weapon_list = list(weapons.keys())
+current_weapon_idx = 0
+
+# Food info
+foods = {
+    "Maçã": 20,
+    "Carne": 40,
+    "Poção": 60,
+}
+food_list = list(foods.keys())
+
+# Locations
+locations = [
+    {"name": "Floresta", "danger": 0.6},
+    {"name": "Cidade Abandonada", "danger": 0.8},
+    {"name": "Fazenda", "danger": 0.3},
+]
+
+# Zombies
+zombie_size = 50
+zombie_speed = 1.5
+zombies = []
+
+# Projectiles
+eggs = []
+egg_size = 15
+
+score_days = 0
+game_over = False
+
+# Timers
+day_length = FPS * 20  # 20 segundos por dia
+day_timer = 0
+
+spawn_timer = 0
+spawn_delay = FPS * 3
+
+# States: "choose_weapon", "choose_food", "choose_location", "playing", "game_over"
+state = "choose_weapon"
+choice_selected = 0
+
+def draw_text_center(text, y, font_, color=BLACK):
+    rendered = font_.render(text, True, color)
+    screen.blit(rendered, (WIDTH // 2 - rendered.get_width() // 2, y))
+
+def draw_player():
+    x, y = player_pos
+    pygame.draw.rect(screen, BROWN, (x, y, player_size, player_size))
+    mask_w, mask_h = player_size, player_size // 2
+    pygame.draw.rect(screen, GRAY, (x, y - mask_h, mask_w, mask_h))
+    ear_size = 10
+    pygame.draw.polygon(screen, GRAY, [(x + 10, y - mask_h), (x + 10 + ear_size, y - mask_h), (x + 10 + ear_size // 2, y - mask_h - ear_size)])
+    pygame.draw.polygon(screen, GRAY, [(x + mask_w - 10, y - mask_h), (x + mask_w - 10 - ear_size, y - mask_h), (x + mask_w - 10 - ear_size // 2, y - mask_h - ear_size)])
+
+def draw_zombie(z):
+    pygame.draw.rect(screen, RED, z)
+
+def draw_projectile(proj):
+    pygame.draw.ellipse(screen, YELLOW, proj)
+
+def spawn_zombie():
+    x = WIDTH + random.randint(10, 100)
+    y = random.randint(0, HEIGHT - zombie_size)
+    return pygame.Rect(x, y, zombie_size, zombie_size)
+
+def move_zombies():
+    for z in zombies:
+        if z.x > player_pos[0]:
+            z.x -= zombie_speed
+
+def move_projectiles():
+    for p in eggs:
+        p.x += weapons[weapon_list[current_weapon_idx]]["speed"]
+
+def handle_collisions():
+    global game_over, eggs, zombies
+    damage = weapons[weapon_list[current_weapon_idx]]["damage"]
+    for p in eggs[:]:
+        for z in zombies[:]:
+            if p.colliderect(z):
+                eggs.remove(p)
+                zombies.remove(z)
+                break
+
+    player_rect = pygame.Rect(*player_pos, player_size, player_size)
+    for z in zombies:
+        if z.colliderect(player_rect):
+            # O zumbi te morde = game over
+            global state
+            state = "game_over"
+
+def draw_health_bar():
+    bar_width = 200
+    bar_height = 25
+    x = 10
+    y = 10
+    pygame.draw.rect(screen, RED, (x, y, bar_width, bar_height))
+    health_width = int((player_health / player_max_health) * bar_width)
+    pygame.draw.rect(screen, GREEN, (x, y, health_width, bar_height))
+    pygame.draw.rect(screen, BLACK, (x, y, bar_width, bar_height), 2)
+
+def draw_score():
+    text = font.render(f"Dias sobrevividos: {score_days}", True, BLACK)
+    screen.blit(text, (10, 45))
+
+def draw_weapon_choice():
+    draw_text_center("Escolha sua arma", 50, big_font)
+    for i, w in enumerate(weapon_list):
+        color = GREEN if i == choice_selected else BLACK
+        text = font.render(w, True, color)
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 150 + i * 40))
+
+def draw_food_choice():
+    draw_text_center("Escolha seu alimento", 50, big_font)
+    for i, f in enumerate(food_list):
+        color = GREEN if i == choice_selected else BLACK
+        text = font.render(f"{f} (+{foods[f]} HP)", True, color)
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 150 + i * 40))
+
+def draw_location_choice():
+    draw_text_center("Escolha o local para ir", 50, big_font)
+    for i, loc in enumerate(locations):
+        color = GREEN if i == choice_selected else BLACK
+        text = font.render(f"{loc['name']} (Perigo: {int(loc['danger']*100)}%)", True, color)
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 150 + i * 40))
+
+def game_over_screen():
+    screen.fill(WHITE)
+    text = big_font.render("VOCÊ MORREU", True, RED)
+    score_text = font.render(f"Dias sobrevividos: {score_days}", True, BLACK)
+    screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()))
+    screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2 + 20))
+    pygame.display.flip()
+    pygame.time.wait(4000)
+    pygame.quit()
+    sys.exit()
+
+def main():
+    global state, choice_selected, player_health, score_days, day_timer, spawn_timer, current_weapon_idx, eggs, zombies
+
+    running = True
+    while running:
+        clock.tick(FPS)
+        screen.fill(WHITE)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+            if event.type == pygame.KEYDOWN:
+                if state in ["choose_weapon", "choose_food", "choose_location"]:
+                    max_choices = len(weapon_list) if state=="choose_weapon" else len(food_list) if state=="choose_food" else len(locations)
+                    if event.key == pygame.K_UP:
+                        choice_selected = (choice_selected - 1) % max_choices
+                    elif event.key == pygame.K_DOWN:
+                        choice_selected = (choice_selected + 1) % max_choices
+                    elif event.key == pygame.K_RETURN:
+                        if state == "choose_weapon":
+                            current_weapon_idx = choice_selected
+                            state = "choose_food"
+                            choice_selected = 0
+                        elif state == "choose_food":
+                            food = food_list[choice_selected]
+                            player_health += foods[food]
+                            if player_health > player_max_health:
+                                player_health = player_max_health
+                            state = "choose_location"
+                            choice_selected = 0
+                        elif state == "choose_location":
+                            loc = locations[choice_selected]
+                            # Ajusta velocidade dos zumbis dependendo do local
+                            global zombie_speed
+                            zombie_speed = 1.5 + loc["danger"] * 2
+                            zombies.clear()
+                            eggs.clear()
+                            state = "playing"
+                            score_days = 0
+                            day_timer = 0
+                            spawn_timer = 0
+
+                elif state == "playing":
+                    if event.key == pygame.K_SPACE:
+                        egg_rect = pygame.Rect(player_pos[0] + player_size, player_pos[1] + player_size // 2 - egg_size // 2, egg_size, egg_size)
+                        eggs.append(egg_rect)
+
+        if state == "choose_weapon":
+            draw_weapon_choice()
+
+        elif state == "choose_food":
+            draw_food_choice()
+
+        elif state == "choose_location":
+            draw_location_choice()
+
+        elif state == "playing":
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_UP] and player_pos[1] > 0:
+                player_pos[1] -= player_speed
+            if keys[pygame.K_DOWN] and player_pos[1] < HEIGHT - player_size:
+                player_pos[1] += player_speed
+
+            spawn_timer += 1
+            if spawn_timer >= spawn_delay:
+                zombies.append(spawn_zombie())
+                spawn_timer = 0
+
+            move_zombies()
+            move_projectiles()
+            handle_collisions()
+
+            draw_player()
+            for z in zombies:
+                draw_zombie(z)
+            for e in eggs:
+                draw_projectile(e)
+
+            draw_health_bar()
+            draw_score()
+
+            day_timer += 1
+            if day_timer >= day_length:
+                score_days += 1
+                day_timer = 0
+                # Cura 10 HP a cada dia
+                player_health += 10
+                if player_health > player_max_health:
+                    player_health = player_max_health
+
+        elif state == "game_over":
+            game_over_screen()
+
+        pygame.display.flip()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
+
+
+
+ 
